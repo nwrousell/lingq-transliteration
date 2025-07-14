@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "LingQ Transliteration",
+  "version": "1.0.0",
+  "description": "Transliterate text on LingQ reader pages to IAST or Hunterian script",
+  
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  
+  "host_permissions": [
+    "https://www.lingq.com/*",
+    "https://aksharamukha.appspot.com/*"
+  ],
+  
+  "content_scripts": [
+    {
+      "matches": ["https://www.lingq.com/*/learn/*/web/reader/*"],
+      "js": [
+        "core/SettingsManager.js",
+        "core/URLMatcher.js", 
+        "core/ContentProcessor.js",
+        "languages/GujaratiTransliterator.js",
+        "content/content.js"
+      ]
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "LingQ Transliteration"
+  }
+}
