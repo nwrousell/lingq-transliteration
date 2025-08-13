@@ -11,7 +11,7 @@
   
   "host_permissions": [
     "https://www.lingq.com/*",
-    "https://aksharamukha.appspot.com/*"
+    "https://aksharamukha-plugin.appspot.com/*"
   ],
   
   "content_scripts": [
@@ -21,6 +21,7 @@
         "core/SettingsManager.js",
         "core/URLMatcher.js", 
         "core/ContentProcessor.js",
+        "core/TransliterationCache.js",
         "languages/GujaratiTransliterator.js",
         "content/content.js"
       ]

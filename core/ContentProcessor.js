@@ -12,7 +12,21 @@ class ContentProcessor {
   }
 
   getTextSpans(paragraph) {
-    return Array.from(paragraph.querySelectorAll('span'));
+    // Look for word-level spans that are deeply nested
+    // The structure is: p > span > span (where the inner spans contain individual words)
+    const allSpans = Array.from(paragraph.querySelectorAll('span'));
+    
+    // Filter to get only the deepest spans that contain actual text (word-level spans)
+    const wordSpans = allSpans.filter(span => {
+      // Check if this span contains text and has no child spans
+      const hasChildSpans = span.querySelector('span') !== null;
+      const hasText = span.textContent.trim() !== '';
+      
+      // We want spans that have text but no child spans (leaf spans)
+      return hasText && !hasChildSpans;
+    });
+    
+    return wordSpans;
   }
 
   storeOriginalContent(element) {
@@ -33,8 +47,52 @@ class ContentProcessor {
       return;
     }
 
+    // Always restore original content before applying new transliteration
+    this.restoreAllContent();
+
+    // Collect all text spans for batch processing
+    const elementsToProcess = [];
+    const textsToTransliterate = [];
+    
     for (const paragraph of elements) {
-      await this.processParagraph(paragraph, transliterator, mode);
+      const spans = this.getTextSpans(paragraph);
+      
+      if (spans.length > 0) {
+        for (const span of spans) {
+          this.storeOriginalContent(span);
+          const originalText = this.originalContent.get(span);
+          if (originalText && originalText.trim() !== '') {
+            elementsToProcess.push(span);
+            textsToTransliterate.push(originalText);
+          }
+        }
+      } else {
+        this.storeOriginalContent(paragraph);
+        const originalText = this.originalContent.get(paragraph);
+        if (originalText && originalText.trim() !== '') {
+          elementsToProcess.push(paragraph);
+          textsToTransliterate.push(originalText);
+        }
+      }
+    }
+
+    if (textsToTransliterate.length === 0) return;
+
+    console.log(`LingQ Transliteration: Batch processing ${textsToTransliterate.length} text elements`);
+
+    // Batch transliterate all texts
+    const transliteratedTexts = await transliterator.batchTransliterate(textsToTransliterate, mode);
+    
+    // Apply results back to elements using array indices
+    for (let i = 0; i < elementsToProcess.length; i++) {
+      const element = elementsToProcess[i];
+      const transliteratedText = transliteratedTexts[i];
+      
+      if (element && transliteratedText) {
+        // Only change textContent to preserve styling and event listeners
+        element.textContent = transliteratedText;
+        this.processedElements.add(element);
+      }
     }
   }
 

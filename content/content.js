@@ -5,6 +5,7 @@ class ExtensionController {
     this.contentProcessor = new ContentProcessor();
     this.transliterator = null;
     this.isInitialized = false;
+    this.observer = null;
   }
 
   async initialize() {
@@ -36,6 +37,9 @@ class ExtensionController {
     // Process page with current settings
     await this.processPage();
     
+    // Set up observer to watch for content changes
+    this.setupContentObserver();
+    
     this.isInitialized = true;
     console.log('LingQ Transliteration: Initialized successfully');
   }
@@ -65,18 +69,88 @@ class ExtensionController {
     }
   }
 
+  setupContentObserver() {
+    const container = document.querySelector('div.reader-container');
+    if (!container) {
+      // If container doesn't exist yet, wait and try again
+      setTimeout(() => this.setupContentObserver(), 1000);
+      return;
+    }
+
+    this.observer = new MutationObserver((mutations) => {
+      let shouldProcess = false;
+      
+      mutations.forEach((mutation) => {
+        // Watch for child list changes (nodes added/removed)
+        if (mutation.type === 'childList') {
+          // Check added nodes
+          if (mutation.addedNodes.length > 0) {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType === Node.ELEMENT_NODE && 
+                  (node.tagName === 'P' || node.querySelector('p') || node.tagName === 'SPAN')) {
+                shouldProcess = true;
+                break;
+              }
+            }
+          }
+          // Check removed nodes (important for re-renders)
+          if (mutation.removedNodes.length > 0) {
+            for (const node of mutation.removedNodes) {
+              if (node.nodeType === Node.ELEMENT_NODE && 
+                  (node.tagName === 'P' || node.querySelector('p') || node.tagName === 'SPAN')) {
+                shouldProcess = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Watch for text content changes in spans (direct textContent modifications)
+        if (mutation.type === 'characterData' && 
+            mutation.target.parentNode && 
+            mutation.target.parentNode.tagName === 'SPAN') {
+          shouldProcess = true;
+        }
+        
+        // Watch for attribute changes that might affect text rendering
+        if (mutation.type === 'attributes' && 
+            mutation.target.tagName === 'SPAN' &&
+            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+          shouldProcess = true;
+        }
+      });
+
+      if (shouldProcess) {
+        console.log('LingQ Transliteration: Content change detected, reprocessing...');
+        // Add a small delay to let LingQ finish its own processing
+        setTimeout(() => this.processPage(), 100);
+      }
+    });
+
+    this.observer.observe(container, {
+      childList: true,
+      subtree: true,
+      characterData: true, // Watch for text content changes
+      attributes: true,    // Watch for attribute changes
+      attributeFilter: ['class', 'style'] // Only watch relevant attributes
+    });
+
+    console.log('LingQ Transliteration: Content observer set up');
+  }
+
   cleanup() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
     if (this.contentProcessor) {
       this.contentProcessor.cleanup();
     }
+    // Save transliteration cache on cleanup
+    if (this.transliterator && this.transliterator.forceSaveCache) {
+      this.transliterator.forceSaveCache();
+    }
   }
-}
-
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeExtension);
-} else {
-  initializeExtension();
 }
 
 let extensionController = null;
@@ -88,6 +162,13 @@ async function initializeExtension() {
   } catch (error) {
     console.error('LingQ Transliteration: Initialization failed:', error);
   }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeExtension);
+} else {
+  initializeExtension();
 }
 
 // Cleanup on page unload
